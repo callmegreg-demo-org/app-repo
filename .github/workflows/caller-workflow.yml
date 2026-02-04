@@ -7,4 +7,4 @@ on:
 
 jobs:
   scanning:
-    uses: callmegreg-demo-org/central-security-repo/.github/workflows/depenendency-review.yml@main
+    uses: callmegreg-demo-org/central-security-repo/.github/workflows/dependency-review.yml@main
