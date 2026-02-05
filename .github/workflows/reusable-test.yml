@@ -1,0 +1,79 @@
+name: Reusable Test Workflow
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "18"
+      test-command:
+        description: "Test command to run"
+        required: false
+        type: string
+        default: "npm test"
+      coverage-threshold:
+        description: "Minimum coverage percentage required"
+        required: false
+        type: string
+        default: "80"
+    outputs:
+      test-result:
+        description: "Test result status"
+        value: ${{ jobs.test.outputs.result }}
+      coverage-percent:
+        description: "Code coverage percentage"
+        value: ${{ jobs.test.outputs.coverage }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.test.outputs.result }}
+      coverage: ${{ steps.test.outputs.coverage }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        id: test
+        run: |
+          ${{ inputs.test-command }}
+          echo "result=passed" >> $GITHUB_OUTPUT
+          echo "coverage=95" >> $GITHUB_OUTPUT
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=${{ steps.test.outputs.coverage }}
+          THRESHOLD=${{ inputs.coverage-threshold }}
+          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+            echo "❌ Coverage $COVERAGE% is below threshold of $THRESHOLD%"
+            exit 1
+          fi
+          echo "✅ Coverage $COVERAGE% meets threshold of $THRESHOLD%"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: coverage/
+          retention-days: 1

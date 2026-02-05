@@ -1,0 +1,45 @@
+name: Action - Open Bad PRs
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "The number of PRs to create"
+        default: 2
+        required: true
+        type: number
+
+permissions: write-all
+
+jobs:
+  file_name:
+    name: Get File Names
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        id: file_name
+        with:
+          result-encoding: string
+          retries: 3
+          script: return JSON.stringify([...Array(${{ github.event.inputs.count }})].map(() => 'File' + (Math.floor(Math.random() * 1000000 + 1) + '.txt')))
+    outputs:
+      file_name: ${{ steps.file_name.outputs.result }}
+
+  create:
+    name: Create
+    runs-on: ubuntu-latest
+    needs: file_name
+    strategy:
+      matrix:
+        file_name: ${{ fromJSON(needs.file_name.outputs.file_name) }}
+        file_content: ['Hello World!']
+        commit_message: ['fail']
+    steps:
+    - uses: actions/checkout@v3
+    - id: create-pr
+      uses: austenstone/merge-queue-demo/.github/actions/create-pr@main
+      with:
+        file_name: ${{ matrix.file_name }}
+        file_content: ${{ matrix.file_content }}
+        token: ${{ secrets.PR_PAT }}
+        commit_message: ${{ matrix.commit_message }}

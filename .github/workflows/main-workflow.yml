@@ -1,0 +1,63 @@
+name: Main Workflow - Build and Test
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "18"
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      node-version: ${{ github.event.inputs.node-version || '18' }}
+      build-command: "npm run build"
+
+  test:
+    name: Test
+    needs: build
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      node-version: ${{ github.event.inputs.node-version || '18' }}
+      test-command: "npm test -- --coverage"
+      coverage-threshold: "80"
+
+  summary:
+    name: Workflow Summary
+    runs-on: ubuntu-latest
+    needs: [ build, test ]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Print Summary
+        run: |
+          echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "Build artifact path: ${{ needs.build.outputs.build-artifact }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Result" >> $GITHUB_STEP_SUMMARY
+          echo "Test status: ${{ needs.test.outputs.test-result }}" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage: ${{ needs.test.outputs.coverage-percent }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Workflow completed successfully" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check job statuses
+        run: |
+          echo "Build status: ${{ needs.build.result }}"
+          echo "Test status: ${{ needs.test.result }}"
+          if [[ "${{ needs.build.result }}" != "success" ]] || [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "❌ Workflow failed"
+            exit 1
+          fi
+          echo "✅ All jobs passed"
