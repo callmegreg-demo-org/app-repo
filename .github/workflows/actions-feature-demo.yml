@@ -1,6 +1,7 @@
 name: Actions Feature Demo
 
 on:
+  # Manual trigger with inputs:
   workflow_dispatch:
     inputs:
       required_job_should_pass:
@@ -20,15 +21,17 @@ on:
         default: "Hello from workflow_dispatch"
 
 jobs:
+  # Job 1
   prep:
     name: Prep (capture inputs -> outputs)
     runs-on: ubuntu-latest
+    # Outputs to pass to downstream jobs:
     outputs:
       required_job_should_pass: ${{ steps.export.outputs.required_job_should_pass }}
       sleep_seconds: ${{ steps.export.outputs.sleep_seconds }}
       demo_message: ${{ steps.export.outputs.demo_message }}
     steps:
-      - name: Show workflow_dispatch inputs
+      - name: Print workflow_dispatch inputs
         shell: bash
         run: |
           echo "required_job_should_pass=${{ inputs.required_job_should_pass }}"
@@ -46,17 +49,22 @@ jobs:
       - name: Dummy work (sleep)
         run: sleep "${{ inputs.sleep_seconds }}"
 
+  # Job 2
   side_quest:
     name: Side quest (runs in parallel)
     runs-on: ubuntu-latest
+    # Depends on prep to get its outputs
     needs: prep
     steps:
       - name: Sleep (parallel with required gate)
+        # Use sleep_seconds from prep outputs
         run: sleep "${{ needs.prep.outputs.sleep_seconds }}"
 
       - name: Echo message from prep outputs
+        # Use demo_message from prep outputs
         run: echo "Message from prep -- ${{ needs.prep.outputs.demo_message }}"
 
+  # Job 3
   required_gate:
     name: Required gate (needs prep)
     runs-on: ubuntu-latest
@@ -64,6 +72,7 @@ jobs:
     outputs:
       gate_status: ${{ steps.gate.outputs.gate_status }}
     steps:
+      # Pass or fail this job based on prep output:
       - name: Decide whether to pass/fail
         id: gate
         shell: bash
@@ -82,25 +91,31 @@ jobs:
       - name: Dummy work (sleep)
         run: sleep "${{ needs.prep.outputs.sleep_seconds }}"
 
+  # Job 4 (matrix)
   matrix_work:
+    # Skip this job if the PR is a draft:
+    if: ${{ !github.event.pull_request.draft }}
     name: Matrix work (py${{ matrix.python }})
     runs-on: ubuntu-latest
     needs:
       - prep
       - required_gate
+    # Define a matrix strategy, which creates multiple parallel jobs:
     strategy:
       fail-fast: false
       matrix:
         python: ["3.14", "3.13", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
+      # Install and configure python:
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Run Python demo script
+      # Run a python script stored in the repo:
+      - name: Run Python script from a file
         shell: bash
         run: |
           python scripts/actions_demo.py \
@@ -108,10 +123,20 @@ jobs:
             --message "${{ needs.prep.outputs.demo_message }}" \
             --python "${{ matrix.python }}"
 
+      # Run a python script with the built-in python shell:
+      - name: Run inline Python script
+        shell: python
+        run: |
+          import os
+          print(os.environ['PATH'])
+
       - name: Dummy work (sleep)
         run: sleep "${{ needs.prep.outputs.sleep_seconds }}"
 
+  # Job 5
   summary:
+    # Always run this job, even if prior jobs failed:
+    if: ${{ always() }}
     name: Summary (consume outputs)
     runs-on: ubuntu-latest
     needs:
@@ -119,7 +144,6 @@ jobs:
       - side_quest
       - required_gate
       - matrix_work
-    if: ${{ always() }}
     steps:
       - name: Show upstream results and outputs
         shell: bash
