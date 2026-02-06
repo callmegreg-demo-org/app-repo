@@ -7,6 +7,14 @@ on:
         default: 2
         required: true
         type: number
+      pr_type:
+        description: "The type of PR to create"
+        default: "slow"
+        required: true
+        type: choice
+        options:
+          - slow
+          - slow and failing
 
 permissions: write-all
 
@@ -32,7 +40,7 @@ jobs:
       matrix:
         file_name: ${{ fromJSON(needs.file_name.outputs.file_name) }}
         file_content: ['Hello World!']
-        commit_message: ['slow']
+        commit_message: ['${{ github.event.inputs.pr_type }}']
     steps:
     - uses: actions/checkout@v6
     - id: create-pr
